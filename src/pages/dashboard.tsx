@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { API_URL } from '../api'; // Importamos la URL configurada para Render
+import { API_URL } from '../api';
+import io from 'socket.io-client'; // NUEVO: Importamos socket.io para las alertas
 
 interface Order {
   id: number;
@@ -14,10 +15,13 @@ interface DashboardProps {
   unreadMessages?: number;
 }
 
-export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
+export default function Dashboard({ unreadMessages: initialUnread = 0 }: DashboardProps) {
   const navigate = useNavigate();
   const [userEmail, setUserEmail] = useState('');
   const [recentOrders, setRecentOrders] = useState<Order[]>([]); 
+  
+  // NUEVO: Estado local para manejar los mensajes sin leer en tiempo real
+  const [unreadMessages, setUnreadMessages] = useState(initialUnread);
   
   const [stats, setStats] = useState({
     clientCount: 0,
@@ -33,6 +37,27 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
     const email = localStorage.getItem('email');
     if (email) setUserEmail(email);
     fetchData();
+
+    // --- NUEVO: CONEXIÓN DE SOCKETS PARA ALERTAS ---
+    const role = localStorage.getItem('role');
+    const socket = io(API_URL);
+
+    // Si es administrador, se une a la sala de alertas
+    if (role === 'ADMIN') {
+      socket.emit("join_room", "admin_room");
+      
+      socket.on("receive_message", (data) => {
+        // Si el mensaje lo envió otra persona (un cliente), sumamos 1 a la burbuja
+        if (data.author !== email) {
+          setUnreadMessages((prev) => prev + 1);
+        }
+      });
+    }
+
+    // Limpieza al desmontar el componente
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   const fetchData = async () => {
@@ -40,7 +65,6 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
     if (!token) return;
 
     try {
-      // CORRECCIÓN: Usamos API_URL en lugar de localhost fijo
       const resClients = await fetch(`${API_URL}/clients`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -53,7 +77,6 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
       if (resOrders.ok) {
         const ordersData: Order[] = await resOrders.json();
 
-        // Lógica de cálculo de estadísticas
         const pendingCount = ordersData.filter(o => o.status === 'PENDIENTE').length;
         const totalMoney = ordersData
             .filter(o => o.status === 'APROBADO') 
@@ -64,12 +87,11 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
           clientCount: clients.length || 0,
           invoiceTotal: totalMoney,
           invoiceCount: approvedCount,
-          pendingOrders: pendingCount
+          pendingOrders: pendingCount // ¡Esto es lo que activa la alerta de pedidos!
         });
 
         setRecentOrders(ordersData);
       }
-
     } catch (error) {
       console.error("Error cargando datos del dashboard");
     }
@@ -96,6 +118,12 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
     navigate('/');
   };
 
+  // NUEVO: Función para ir al chat y limpiar la burbuja de notificaciones
+  const goToChat = () => {
+    setUnreadMessages(0);
+    navigate('/chat');
+  };
+
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = recentOrders.slice(indexOfFirstItem, indexOfLastItem);
@@ -112,8 +140,9 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
         <div className="flex items-center gap-4">
           <span className="text-gray-600 text-sm hidden md:inline">Hola, {userEmail}</span>
           
+          {/* BOTÓN DE CHAT CON BURBUJA DINÁMICA */}
           <button 
-            onClick={() => navigate('/chat')}
+            onClick={goToChat}
             className="relative bg-blue-100 text-blue-700 font-bold py-1 px-4 rounded hover:bg-blue-200 transition flex items-center gap-2"
           >
             💬 Soporte
@@ -171,6 +200,7 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
             </div>
           </Link>
 
+          {/* TARJETA DE PEDIDOS CON ALERTA DE PENDIENTES */}
           <Link to="/orders" className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition border-l-4 border-yellow-500 block group relative">
             {stats.pendingOrders > 0 && (
               <div className="absolute -top-3 -right-3 bg-red-500 text-white w-8 h-8 flex items-center justify-center rounded-full font-black shadow-lg animate-bounce">

@@ -29,16 +29,15 @@ export default function Chat({ onOpen }: { onOpen: () => void }) {
   const userRole = localStorage.getItem('role') || "USER";
 
   // --- ESTADOS DE VISTA ---
-  // Si es ADMIN, inicia viendo la LISTA. Si es CLIENTE, inicia directo en el CHAT.
   const [view, setView] = useState<'LIST' | 'CHAT'>(userRole === 'ADMIN' ? 'LIST' : 'CHAT');
   const [selectedRoom, setSelectedRoom] = useState<string>(userRole === 'ADMIN' ? '' : `room_${userEmail}`);
   const [chatTitle, setChatTitle] = useState<string>(userRole === 'ADMIN' ? 'Bandeja de Mensajes' : 'Soporte Privado');
 
   // --- ESTADOS DE DATOS ---
   const [message, setMessage] = useState("");
-  const [list, setList] = useState<Message[]>([]); // Mensajes del chat actual
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]); // Lista de clientes para el admin
-  const [allMessages, setAllMessages] = useState<any[]>([]); // Caché de mensajes para el admin
+  const [list, setList] = useState<Message[]>([]); 
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]); 
+  const [allMessages, setAllMessages] = useState<any[]>([]); 
 
   // 1. CARGA INICIAL
   useEffect(() => {
@@ -55,9 +54,8 @@ export default function Chat({ onOpen }: { onOpen: () => void }) {
       const data = await res.json();
 
       if (userRole === 'ADMIN') {
-        setAllMessages(data); // Guardamos todos para no recargar la base de datos a cada rato
+        setAllMessages(data); 
         
-        // Agrupamos los mensajes por sala para armar la lista de clientes
         const roomsMap = new Map();
         data.forEach((msg: any) => {
           if (msg.room && msg.room.startsWith('room_')) {
@@ -70,7 +68,6 @@ export default function Chat({ onOpen }: { onOpen: () => void }) {
         });
         setChatSessions(Array.from(roomsMap.values()));
       } else {
-        // Si es cliente, formateamos sus mensajes y nos unimos a su sala
         const history = data.map(formatMsg);
         setList(history);
         socket.emit("join_room", `room_${userEmail}`);
@@ -92,7 +89,6 @@ export default function Chat({ onOpen }: { onOpen: () => void }) {
   // 2. ESCUCHAR MENSAJES NUEVOS
   useEffect(() => {
     const handleReceiveMessage = (data: any) => {
-      // A. Actualizar el chat abierto si el mensaje pertenece a la sala actual
       if (data.room === selectedRoom) {
         setList(prev => [...prev, {
           author: data.author,
@@ -104,7 +100,6 @@ export default function Chat({ onOpen }: { onOpen: () => void }) {
         }]);
       }
 
-      // B. Si soy admin, actualizar la bandeja de entrada (último mensaje)
       if (userRole === 'ADMIN') {
         setChatSessions(prev => {
           const existing = prev.find(s => s.room === data.room);
@@ -113,7 +108,6 @@ export default function Chat({ onOpen }: { onOpen: () => void }) {
             client: data.room.replace('room_', ''),
             lastMsg: data.message || '📎 Archivo adjunto'
           };
-          // Ponemos el chat actualizado arriba de la lista
           return existing 
             ? [updatedSession, ...prev.filter(s => s.room !== data.room)]
             : [updatedSession, ...prev];
@@ -125,7 +119,6 @@ export default function Chat({ onOpen }: { onOpen: () => void }) {
     return () => { socket.off("receive_message", handleReceiveMessage); };
   }, [selectedRoom, userRole]);
 
-  // Scroll automático
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [list, view]);
@@ -136,22 +129,18 @@ export default function Chat({ onOpen }: { onOpen: () => void }) {
     setChatTitle(`Chat: ${client}`);
     setView('CHAT');
     
-    // Filtramos los mensajes de este cliente específico
     const roomMsgs = allMessages.filter(m => m.room === room).map(formatMsg);
     setList(roomMsgs);
     
-    // El admin se une a la sala de este cliente
     socket.emit("join_room", room);
   };
 
   const handleBack = () => {
     if (userRole === 'ADMIN' && view === 'CHAT') {
-      // Si el admin está en un chat, lo devolvemos a la lista
       setView('LIST');
       setChatTitle('Bandeja de Mensajes');
       setSelectedRoom('');
     } else {
-      // Si está en la lista o es un cliente, sale de la pantalla
       navigate(-1);
     }
   };
@@ -191,22 +180,40 @@ export default function Chat({ onOpen }: { onOpen: () => void }) {
     } catch (error) { alert("Error al subir archivo"); }
   };
 
+  // --- CORRECCIÓN: FUNCIÓN CLEAR CHAT ACTUALIZADA ---
   const clearChat = async () => {
-    if (!confirm("¿Deseas limpiar tu historial?")) return;
+    if (!confirm("¿Deseas limpiar tu historial? La otra persona conservará sus mensajes.")) return;
+    
+    // Identificamos exactamente qué sala queremos borrar
+    const roomToClear = userRole === 'ADMIN' ? selectedRoom : `room_${userEmail}`;
+
     try {
-      const res = await fetch(`${API_URL}/chat/history`, {
+      // Usamos la nueva ruta que incluye el nombre de la sala al final
+      const res = await fetch(`${API_URL}/chat/history/${roomToClear}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-      if (res.ok) setList([]); 
-    } catch (error) { alert("Error al limpiar historial"); }
+      
+      if (res.ok) {
+        setList([]); 
+        if (userRole === 'ADMIN') {
+          // Si es admin, lo devolvemos a la bandeja y quitamos ese cliente de la lista
+          setChatSessions(prev => prev.filter(s => s.room !== roomToClear));
+          setView('LIST');
+          setChatTitle('Bandeja de Mensajes');
+          setSelectedRoom('');
+        }
+      }
+    } catch (error) { 
+      alert("Error al intentar ocultar el historial"); 
+    }
   };
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-0 sm:p-4 font-sans">
       <div className="bg-white w-full max-w-2xl h-screen sm:h-[700px] shadow-2xl sm:rounded-3xl overflow-hidden flex flex-col border border-slate-200">
         
-        {/* CABECERA ROBUSTA (Siempre visible) */}
+        {/* CABECERA ROBUSTA */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-5 flex justify-between items-center text-white shadow-lg shrink-0">
           <div className="flex items-center gap-4">
             <button onClick={handleBack} className="hover:bg-white/20 p-2 rounded-full transition-all flex items-center justify-center w-10 h-10 bg-white/10">
@@ -230,9 +237,8 @@ export default function Chat({ onOpen }: { onOpen: () => void }) {
           )}
         </div>
 
-        {/* CONTENIDO DINÁMICO: Lista vs Chat */}
+        {/* CONTENIDO DINÁMICO */}
         {view === 'LIST' ? (
-          // --- VISTA DE BANDEJA DE ENTRADA (Solo Admin) ---
           <div className="flex-1 p-4 overflow-y-auto bg-[#f0f2f5]">
             <h3 className="text-gray-500 text-xs font-bold uppercase mb-4 px-2">Conversaciones Activas</h3>
             
@@ -261,7 +267,6 @@ export default function Chat({ onOpen }: { onOpen: () => void }) {
             )}
           </div>
         ) : (
-          // --- VISTA DE CHAT PRIVADO ---
           <>
             <div className="flex-1 p-6 overflow-y-auto bg-[#f0f2f5] flex flex-col gap-4">
               {list.length === 0 && (
@@ -295,7 +300,6 @@ export default function Chat({ onOpen }: { onOpen: () => void }) {
               <div ref={bottomRef} />
             </div>
 
-            {/* Input de mensajes */}
             <div className="p-4 bg-white border-t border-slate-100 flex items-center gap-3 shrink-0">
               <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf" />
               <button onClick={() => fileInputRef.current?.click()} className="text-2xl hover:bg-slate-100 p-2 rounded-xl transition">📎</button>

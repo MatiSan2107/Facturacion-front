@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import io from 'socket.io-client'; // NUEVO: Importamos socket.io para las notificaciones
 
 // 1. URL DINÁMICA (Prioriza Render, luego Localhost)
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000';
@@ -27,7 +28,7 @@ interface StoreProps {
   unreadMessages?: number;
 }
 
-export default function Store({ unreadMessages = 0 }: StoreProps) {
+export default function Store({ unreadMessages: initialUnread = 0 }: StoreProps) {
   const navigate = useNavigate();
   
   const [products, setProducts] = useState<Product[]>([]);
@@ -35,7 +36,7 @@ export default function Store({ unreadMessages = 0 }: StoreProps) {
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isOrdersOpen, setIsOrdersOpen] = useState(false); // Estado para el modal de pedidos
+  const [isOrdersOpen, setIsOrdersOpen] = useState(false); 
 
   const [searchTerm, setSearchTerm] = useState(""); 
   const [orderSearch, setOrderSearch] = useState("");
@@ -43,8 +44,31 @@ export default function Store({ unreadMessages = 0 }: StoreProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const productsPerPage = 6;
 
+  // NUEVO: Estado local para los mensajes sin leer del cliente
+  const [unreadMessages, setUnreadMessages] = useState(initialUnread);
+
   useEffect(() => {
     fetchData();
+
+    // --- NUEVO: CONEXIÓN DE SOCKETS PARA NOTIFICACIONES DEL CLIENTE ---
+    const email = localStorage.getItem('email');
+    const socket = io(API_URL);
+
+    if (email) {
+      // El cliente se une a su propia sala privada
+      socket.emit("join_room", `room_${email}`);
+      
+      socket.on("receive_message", (data) => {
+        // Si el mensaje viene del admin, sumamos 1 a la burbuja
+        if (data.author !== email) {
+          setUnreadMessages((prev) => prev + 1);
+        }
+      });
+    }
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -120,7 +144,7 @@ export default function Store({ unreadMessages = 0 }: StoreProps) {
         alert('✅ ¡Pedido enviado!');
         setCart([]);
         setIsCartOpen(false);
-        fetchData(); // Recargamos pedidos para que aparezca el nuevo
+        fetchData(); 
       }
     } catch (error) {
       alert("Error al enviar el pedido");
@@ -132,7 +156,12 @@ export default function Store({ unreadMessages = 0 }: StoreProps) {
     navigate('/');
   };
 
-  // Lógica de Filtrado
+  // NUEVO: Función para ir al chat y limpiar notificaciones
+  const goToChat = () => {
+    setUnreadMessages(0);
+    navigate('/chat');
+  };
+
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -160,7 +189,17 @@ export default function Store({ unreadMessages = 0 }: StoreProps) {
             <button onClick={() => setIsOrdersOpen(true)} className={`relative px-4 py-2 rounded-lg font-bold transition flex items-center gap-2 ${hasRejectedOrders ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
               📜 <span className="hidden sm:inline">Mis Pedidos</span>
             </button>
-            <button onClick={() => navigate('/chat')} className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-bold hover:bg-blue-200 transition">💬 Chat</button>
+            
+            {/* NUEVO: Botón de Chat con Burbuja */}
+            <button onClick={goToChat} className="relative bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-bold hover:bg-blue-200 transition">
+              💬 Chat
+              {unreadMessages > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border-2 border-white animate-bounce shadow-lg">
+                  {unreadMessages}
+                </span>
+              )}
+            </button>
+
             <button onClick={() => setIsCartOpen(true)} className="relative bg-yellow-400 text-yellow-900 px-4 py-2 rounded-lg font-bold shadow hover:bg-yellow-500 transition">
               🛒 Carrito {cart.length > 0 && <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full absolute -top-2 -right-2">{cart.reduce((a, b) => a + b.quantity, 0)}</span>}
             </button>
@@ -227,7 +266,7 @@ export default function Store({ unreadMessages = 0 }: StoreProps) {
         </div>
       )}
 
-      {/* --- NUEVO: MODAL DE PEDIDOS (HISTORIAL) --- */}
+      {/* MODAL DE PEDIDOS (HISTORIAL) */}
       {isOrdersOpen && (
         <div className="fixed inset-0 z-50 flex justify-center items-center p-4">
           <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsOrdersOpen(false)}></div>
