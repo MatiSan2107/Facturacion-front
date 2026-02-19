@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
+// 1. Definimos la URL de la API de forma dinámica.
+// VITE_API_URL es la variable que configuraremos en Vercel.
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -9,8 +13,11 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(''); // Limpiamos errores previos antes de intentar
+
     try {
-      const response = await fetch('http://localhost:3000/auth/login', {
+      // 2. Usamos la constante API_URL en lugar de la dirección fija.
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -19,22 +26,24 @@ export default function Login() {
       const data = await response.json();
       
       if (response.ok) {
-        // 1. Guardamos los datos en el navegador
+        // Guardamos los datos de sesión
         localStorage.setItem('token', data.token);
         localStorage.setItem('email', email);
-        localStorage.setItem('role', data.user.role); // Guardamos si es ADMIN o USER
+        localStorage.setItem('role', data.user.role);
         
-        // 2. REDIRECCIÓN INTELIGENTE
+        // Redirección basada en el rol
         if (data.user.role === 'ADMIN') {
-          navigate('/dashboard'); // El jefe va al panel
+          navigate('/dashboard');
         } else {
-          navigate('/store'); // Los clientes van a la tienda
+          navigate('/store');
         }
       } else {
-        setError(data.error);
+        // Manejo de errores del servidor (ej: credenciales incorrectas)
+        setError(data.error || 'Credenciales inválidas');
       }
     } catch (err) {
-      setError('Error de conexión con el servidor');
+      // Error si el backend de Render está apagado o no hay internet
+      setError('No se pudo conectar con el servidor. Verifica tu conexión.');
     }
   };
 
@@ -65,7 +74,7 @@ export default function Login() {
             />
           </div>
           
-          {error && <div className="text-red-500 text-sm text-center">{error}</div>}
+          {error && <div className="text-red-500 text-sm text-center font-semibold">{error}</div>}
           
           <button 
             type="submit"
@@ -81,7 +90,6 @@ export default function Login() {
             Regístrate aquí
           </Link>
         </div>
-
       </div>
     </div>
   );
