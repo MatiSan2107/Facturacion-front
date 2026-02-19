@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+// 1. DEFINIMOS LA URL DINÁMICA
+// Conecta a Render en producción o localhost en desarrollo
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
 interface Order {
   id: number;
   total: number;
@@ -32,41 +36,46 @@ export default function Invoices() {
     setCurrentPage(1);
   }, [searchTerm, searchDate]);
 
+  // 2. ACTUALIZAMOS EL FETCH DE PEDIDOS
   const fetchOrders = async () => {
     const token = localStorage.getItem('token');
-    const res = await fetch('http://localhost:3000/orders', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (res.ok) setOrders(await res.json());
+    try {
+      const res = await fetch(`${API_URL}/orders`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) setOrders(await res.json());
+    } catch (error) {
+      console.error("Error al cargar pedidos");
+    }
   };
 
+  // 3. ACTUALIZAMOS EL CAMBIO DE ESTADO
   const updateStatus = async (id: number, status: string) => {
     if (!confirm(`¿Confirmas ${status === 'APROBADO' ? 'APROBAR' : 'RECHAZAR'} este pedido?`)) return;
 
     const token = localStorage.getItem('token');
-    await fetch(`http://localhost:3000/orders/${id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ status })
-    });
-    fetchOrders();
-  };
-
-  const handlePrint = () => {
-    window.print();
+    try {
+      await fetch(`${API_URL}/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ status })
+      });
+      fetchOrders();
+    } catch (error) {
+      alert("Error de conexión al actualizar estado");
+    }
   };
 
   // --- LÓGICA DE FILTRADO (SOLO PENDIENTES) ---
   const filteredOrders = orders.filter(order => {
-    // 1. Filtro: SOLO mostrar pedidos con estado 'PENDIENTE'
     const isPending = order.status === 'PENDIENTE';
-
-    // 2. Filtro por Texto
     const matchesText = 
         order.user?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         order.id.toString().includes(searchTerm);
 
-    // 3. Filtro por Fecha
     let matchesDate = true;
     if (searchDate) {
         const orderDateObj = new Date(order.createdAt);
@@ -75,7 +84,6 @@ export default function Invoices() {
                                 String(orderDateObj.getDate()).padStart(2, '0');
         matchesDate = orderDateString === searchDate;
     }
-
     return isPending && matchesText && matchesDate;
   });
 
@@ -110,7 +118,6 @@ export default function Invoices() {
         
         {/* BARRA DE FILTROS */}
         <div className="p-6 border-b border-gray-100 bg-gray-50 flex flex-col md:flex-row gap-4 justify-between items-center">
-            
             <div className="relative w-full md:w-96">
                 <span className="absolute left-3 top-3 text-gray-400">🔍</span>
                 <input 
@@ -131,13 +138,7 @@ export default function Invoices() {
                     onChange={(e) => setSearchDate(e.target.value)}
                 />
                 {searchDate && (
-                    <button 
-                        onClick={() => setSearchDate('')}
-                        className="text-gray-400 hover:text-red-500 font-bold px-2"
-                        title="Borrar fecha"
-                    >
-                        ✕
-                    </button>
+                    <button onClick={() => setSearchDate('')} className="text-gray-400 hover:text-red-500 font-bold px-2">✕</button>
                 )}
             </div>
         </div>
@@ -160,7 +161,7 @@ export default function Invoices() {
                         <tr>
                             <td colSpan={6} className="text-center py-12">
                                 <p className="text-4xl mb-2">✅</p>
-                                <p className="text-gray-500 font-medium">¡Todo al día! No hay pedidos pendientes.</p>
+                                <p className="text-gray-500 font-medium">No hay pedidos pendientes.</p>
                             </td>
                         </tr>
                     ) : (
@@ -170,7 +171,7 @@ export default function Invoices() {
                                 <td className="px-6 py-4 text-gray-600">{new Date(order.createdAt).toLocaleDateString()}</td>
                                 <td className="px-6 py-4 font-bold text-gray-800">{order.user?.name || 'Cliente'}</td>
                                 <td className="px-6 py-4 text-center">
-                                    <span className="px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider bg-yellow-100 text-yellow-700 animate-pulse">
+                                    <span className="px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider bg-yellow-100 text-yellow-700">
                                         PENDIENTE
                                     </span>
                                 </td>
@@ -179,15 +180,13 @@ export default function Invoices() {
                                     <div className="flex justify-center gap-3">
                                         <button 
                                             onClick={() => updateStatus(order.id, 'APROBADO')} 
-                                            className="text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1 rounded border border-green-200 font-bold transition flex items-center gap-1 shadow-sm"
-                                            title="Aprobar Pedido"
+                                            className="text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1 rounded border border-green-200 font-bold transition shadow-sm"
                                         >
                                             ✔ Aprobar
                                         </button>
                                         <button 
                                             onClick={() => updateStatus(order.id, 'RECHAZADO')} 
-                                            className="text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1 rounded border border-red-200 font-bold transition flex items-center gap-1 shadow-sm"
-                                            title="Rechazar Pedido"
+                                            className="text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1 rounded border border-red-200 font-bold transition shadow-sm"
                                         >
                                             ✕ Rechazar
                                         </button>
@@ -203,37 +202,13 @@ export default function Invoices() {
         {/* PAGINACIÓN */}
         {totalPages > 1 && (
           <div className="p-4 bg-gray-50/50 border-t border-gray-100 flex justify-center items-center gap-2">
-            <button 
-              onClick={() => paginate(currentPage - 1)} 
-              disabled={currentPage === 1}
-              className="px-3 py-1 rounded border bg-white text-gray-600 disabled:opacity-50 hover:bg-gray-100 text-sm font-medium transition shadow-sm"
-            >
-              Anterior
-            </button>
-            
+            <button onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} className="px-3 py-1 rounded border bg-white text-gray-600 disabled:opacity-50 hover:bg-gray-100 text-sm transition">Anterior</button>
             <div className="flex gap-1">
               {Array.from({ length: totalPages }, (_, i) => (
-                <button
-                  key={i + 1}
-                  onClick={() => paginate(i + 1)}
-                  className={`w-8 h-8 rounded border text-sm font-bold transition shadow-sm ${
-                    currentPage === i + 1 
-                      ? 'bg-blue-600 text-white border-blue-600' 
-                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  {i + 1}
-                </button>
+                <button key={i + 1} onClick={() => paginate(i + 1)} className={`w-8 h-8 rounded border text-sm font-bold transition ${currentPage === i + 1 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600'}`}>{i + 1}</button>
               ))}
             </div>
-
-            <button 
-              onClick={() => paginate(currentPage + 1)} 
-              disabled={currentPage === totalPages}
-              className="px-3 py-1 rounded border bg-white text-gray-600 disabled:opacity-50 hover:bg-gray-100 text-sm font-medium transition shadow-sm"
-            >
-              Siguiente
-            </button>
+            <button onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages} className="px-3 py-1 rounded border bg-white text-gray-600 disabled:opacity-50 hover:bg-gray-100 text-sm transition">Siguiente</button>
           </div>
         )}
       </div>

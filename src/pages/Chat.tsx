@@ -2,8 +2,12 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 
-// 1. Conexión al servidor de sockets
-const socket = io("http://localhost:3000");
+// 1. DEFINIMOS LA URL DINÁMICA
+// Conecta a Render en producción o localhost en desarrollo
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+// 2. CONEXIÓN AL SERVIDOR DE SOCKETS USANDO LA URL DINÁMICA
+const socket = io(API_URL);
 
 interface Message {
   author: string;
@@ -32,7 +36,6 @@ export default function Chat({ onOpen }: ChatProps) {
 
     // Escuchar mensajes nuevos en tiempo real
     const handleReceiveMessage = (data: any) => {
-      // Nota: Ya no escuchamos "CHAT_CLEARED" para que el borrado sea individual
       setList((prev) => [...prev, {
         author: data.author,
         text: data.message,
@@ -50,11 +53,11 @@ export default function Chat({ onOpen }: ChatProps) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [list]);
 
-  // 2. Cargar historial filtrado (Solo lo que no ha sido marcado como borrado)
+  // 3. CARGAR HISTORIAL DESDE LA NUBE
   const fetchHistory = async () => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch('http://localhost:3000/chat/history', {
+      const response = await fetch(`${API_URL}/chat/history`, { // <-- CAMBIADO
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
@@ -68,11 +71,11 @@ export default function Chat({ onOpen }: ChatProps) {
       
       setList(history);
     } catch (error) {
-      console.error("Error cargando historial");
+      console.error("Error cargando historial del chat");
     }
   };
 
-  // 3. Enviar mensaje
+  // 4. ENVIAR MENSAJE VÍA SOCKET
   const sendMessage = async () => {
     if (message.trim() === "") return;
 
@@ -86,18 +89,18 @@ export default function Chat({ onOpen }: ChatProps) {
     setMessage("");
   };
 
-  // 4. Borrar historial (Solo para el usuario actual)
+  // 5. BORRAR HISTORIAL INDIVIDUAL
   const clearChat = async () => {
     if (!confirm("¿Deseas limpiar tu historial de chat? La otra persona conservará los mensajes.")) return;
 
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch('http://localhost:3000/chat/history', {
+      const res = await fetch(`${API_URL}/chat/history`, { // <-- CAMBIADO
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
-        setList([]); // Se limpia solo mi pantalla
+        setList([]); 
       }
     } catch (error) {
       alert("Error al intentar ocultar el historial");
@@ -128,7 +131,7 @@ export default function Chat({ onOpen }: ChatProps) {
             className="bg-red-500/20 hover:bg-red-600 p-2.5 rounded-xl transition-all group flex items-center gap-2 border border-red-400/30" 
             title="Limpiar mi chat"
           >
-            <span className="text-[10px] font-bold hidden sm:inline">LIMPIAR MI VISTA</span>
+            <span className="text-[10px] font-bold hidden sm:inline uppercase">Limpiar mi vista</span>
             <span className="group-hover:scale-110 block">🗑️</span>
           </button>
         </div>
@@ -138,7 +141,7 @@ export default function Chat({ onOpen }: ChatProps) {
           {list.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full opacity-40">
               <span className="text-5xl mb-4">💬</span>
-              <p className="text-sm font-semibold text-slate-600 italic">Tu historial está vacío.</p>
+              <p className="text-sm font-semibold text-slate-600 italic uppercase">Tu historial está vacío</p>
             </div>
           )}
 
@@ -169,7 +172,7 @@ export default function Chat({ onOpen }: ChatProps) {
         <div className="p-4 bg-white border-t border-slate-100 flex items-center gap-3 shrink-0">
           <input
             type="text"
-            className="flex-1 bg-slate-100 border-none rounded-2xl px-5 py-3.5 text-sm focus:ring-2 focus:ring-blue-500 transition-all"
+            className="flex-1 bg-slate-100 border-none rounded-2xl px-5 py-3.5 text-sm focus:ring-2 focus:ring-blue-500 transition-all outline-none"
             placeholder="Escribe un mensaje aquí..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}

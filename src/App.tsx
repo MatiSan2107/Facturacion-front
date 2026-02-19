@@ -13,8 +13,12 @@ import Chat from './pages/Chat';
 import { useEffect, useState } from 'react';
 import io from 'socket.io-client';
 
-// 1. CONEXIÓN AL SOCKET (Fuera para evitar múltiples conexiones)
-const socket = io("http://localhost:3000");
+// 1. DEFINIMOS LA URL DINÁMICA
+// Se conecta a Render en producción o localhost en desarrollo
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+// 2. CONEXIÓN AL SOCKET USANDO LA URL DINÁMICA
+const socket = io(API_URL);
 
 // --- GUARDIA DE SEGURIDAD ---
 const ProtectedRoute = ({ children, allowedRole }: { children: React.ReactNode, allowedRole?: string }) => {
@@ -32,11 +36,11 @@ const ProtectedRoute = ({ children, allowedRole }: { children: React.ReactNode, 
 };
 
 function App() {
-  // 2. ESTADO PARA NOTIFICACIONES GLOBALES
+  // 3. ESTADO PARA NOTIFICACIONES GLOBALES
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    // Escuchar si llega un mensaje nuevo
+    // Escuchar si llega un mensaje nuevo vía Socket desde Render
     socket.on("receive_message", (data) => {
       const userEmail = localStorage.getItem('email');
       

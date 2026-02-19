@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
+// 1. Definimos la URL de la API dinámicamente.
+// VITE_API_URL es la que configuraste en el panel de Vercel.
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
 export default function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -10,7 +14,8 @@ export default function Register() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://localhost:3000/auth/register', {
+      // 2. Cambiamos la URL fija por la constante API_URL
+      const response = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password }),
@@ -24,7 +29,8 @@ export default function Register() {
         alert(`❌ Error: ${data.error}`);
       }
     } catch (error) {
-      alert('Error de conexión con el servidor');
+      // Este mensaje aparecerá si la URL de Render está mal escrita en Vercel
+      alert('Error de conexión con el servidor. Verifica la URL de la API.');
     }
   };
 
@@ -42,7 +48,6 @@ export default function Register() {
               value={name}
               onChange={(e) => {
                 const val = e.target.value;
-                // Esta expresión regular permite letras (a-z), ñ, tildes y espacios
                 if (/^[a-zA-ZñÑáéíóúÁÉÍÓÚ\s]*$/.test(val)) {
                   setName(val);
                 }

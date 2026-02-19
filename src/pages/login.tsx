@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
 // 1. Definimos la URL de la API de forma dinámica.
-// VITE_API_URL es la variable que configuraremos en Vercel.
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// Es VITAL que en Vercel la variable se llame VITE_API_URL.
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -13,10 +13,10 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(''); // Limpiamos errores previos antes de intentar
+    setError(''); 
 
     try {
-      // 2. Usamos la constante API_URL en lugar de la dirección fija.
+      // 2. Usamos la constante API_URL para conectar con Render.
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -26,24 +26,24 @@ export default function Login() {
       const data = await response.json();
       
       if (response.ok) {
-        // Guardamos los datos de sesión
+        // Guardamos los datos de sesión en el navegador
         localStorage.setItem('token', data.token);
         localStorage.setItem('email', email);
         localStorage.setItem('role', data.user.role);
         
-        // Redirección basada en el rol
+        // Redirección inteligente basada en el rol del usuario
         if (data.user.role === 'ADMIN') {
           navigate('/dashboard');
         } else {
           navigate('/store');
         }
       } else {
-        // Manejo de errores del servidor (ej: credenciales incorrectas)
         setError(data.error || 'Credenciales inválidas');
       }
     } catch (err) {
-      // Error si el backend de Render está apagado o no hay internet
-      setError('No se pudo conectar con el servidor. Verifica tu conexión.');
+      // Si llegas aquí, es porque el frontend no pudo alcanzar la URL de Render.
+      setError('Error de conexión. Verifica que el servidor esté activo.');
+      console.error("Error en login:", err);
     }
   };
 

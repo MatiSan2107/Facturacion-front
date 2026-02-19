@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+// 1. DEFINIMOS LA URL DINÁMICA
+// Conecta a Render en producción o localhost en desarrollo
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
 interface Order {
   id: number;
   total: number;
@@ -13,83 +17,83 @@ interface Order {
 export default function Invoices() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
-  
-  // ESTADOS DE BÚSQUEDA
   const [searchTerm, setSearchTerm] = useState('');
   const [searchDate, setSearchDate] = useState(''); 
-
-  // --- NUEVO: ESTADOS DE PAGINACIÓN ---
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 6; // Máximo 6 elementos por página
-
+  const itemsPerPage = 6;
   const [selectedInvoice, setSelectedInvoice] = useState<Order | null>(null);
 
   useEffect(() => {
     fetchOrders();
   }, []);
 
-  // --- NUEVO: Resetear a página 1 cuando cambian los filtros ---
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, searchDate]);
 
+  // 2. FETCH DE PEDIDOS DESDE LA NUBE
   const fetchOrders = async () => {
     const token = localStorage.getItem('token');
-    const res = await fetch('http://localhost:3000/orders', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (res.ok) setOrders(await res.json());
+    try {
+      const res = await fetch(`${API_URL}/orders`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) setOrders(await res.json());
+    } catch (error) {
+      console.error("Error al obtener pedidos:", error);
+    }
   };
 
+  // 3. ACTUALIZAR ESTADO (APROBAR/RECHAZAR)
   const updateStatus = async (id: number, status: string) => {
     if (!confirm(`¿Confirmas ${status === 'APROBADO' ? 'APROBAR' : 'RECHAZAR'} este pedido?`)) return;
 
     const token = localStorage.getItem('token');
-    await fetch(`http://localhost:3000/orders/${id}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ status })
-    });
-    fetchOrders();
+    try {
+      await fetch(`${API_URL}/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ status })
+      });
+      fetchOrders();
+    } catch (error) {
+      alert("Error al actualizar el estado");
+    }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => { window.print(); };
 
   // --- LÓGICA DE FILTRADO ---
   const filteredOrders = orders.filter(order => {
-    // 1. Filtro por Texto (Nombre o ID)
     const matchesText = 
         order.user?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         order.id.toString().includes(searchTerm);
 
-    // 2. Filtro por Fecha
     let matchesDate = true;
     if (searchDate) {
         const orderDateObj = new Date(order.createdAt);
         const orderDateString = orderDateObj.getFullYear() + '-' + 
                                 String(orderDateObj.getMonth() + 1).padStart(2, '0') + '-' + 
                                 String(orderDateObj.getDate()).padStart(2, '0');
-        
         matchesDate = orderDateString === searchDate;
     }
-
     return matchesText && matchesDate;
   });
 
-  // --- NUEVO: LÓGICA DE CORTE PARA PAGINACIÓN ---
+  // --- PAGINACIÓN ---
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredOrders.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
   return (
     <div className="min-h-screen bg-gray-100 p-8 font-sans">
       
-      {/* HEADER (Botón +Nueva ELIMINADO) */}
+      {/* HEADER */}
       <div className="max-w-7xl mx-auto flex justify-between items-center mb-8 print:hidden">
         <div>
             <h1 className="text-2xl font-bold text-gray-800">Mis Facturas / Pedidos</h1>
@@ -109,8 +113,6 @@ export default function Invoices() {
         
         {/* BARRA DE FILTROS */}
         <div className="p-6 border-b border-gray-100 bg-gray-50 flex flex-col md:flex-row gap-4 justify-between items-center">
-            
-            {/* Buscador de Texto */}
             <div className="relative w-full md:w-96">
                 <span className="absolute left-3 top-3 text-gray-400">🔍</span>
                 <input 
@@ -121,8 +123,6 @@ export default function Invoices() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
-
-            {/* Selector de Fecha */}
             <div className="flex items-center gap-2 bg-white border border-gray-300 px-3 py-2 rounded-lg text-gray-600 text-sm">
                 <span>Fecha:</span>
                 <input 
@@ -132,13 +132,7 @@ export default function Invoices() {
                     onChange={(e) => setSearchDate(e.target.value)}
                 />
                 {searchDate && (
-                    <button 
-                        onClick={() => setSearchDate('')}
-                        className="text-gray-400 hover:text-red-500 font-bold px-2"
-                        title="Borrar fecha"
-                    >
-                        ✕
-                    </button>
+                    <button onClick={() => setSearchDate('')} className="text-gray-400 hover:text-red-500 font-bold px-2">✕</button>
                 )}
             </div>
         </div>
@@ -160,7 +154,6 @@ export default function Invoices() {
                     {currentItems.length === 0 ? (
                         <tr><td colSpan={6} className="text-center py-10 text-gray-400">No se encontraron resultados.</td></tr>
                     ) : (
-                        // USAMOS currentItems EN LUGAR DE filteredOrders
                         currentItems.map(order => (
                             <tr key={order.id} className="hover:bg-blue-50/30 transition">
                                 <td className="px-6 py-4 text-gray-400 font-medium">#{order.id.toString().padStart(4, '0')}</td>
@@ -169,27 +162,19 @@ export default function Invoices() {
                                 <td className="px-6 py-4 text-center">
                                     <span className={`px-3 py-1 rounded-sm text-[10px] font-black uppercase tracking-wider ${
                                         order.status === 'APROBADO' ? 'bg-green-100 text-green-700' :
-                                        order.status === 'RECHAZADO' ? 'bg-red-100 text-red-600' :
-                                        'bg-yellow-100 text-yellow-700'
+                                        order.status === 'RECHAZADO' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-700'
                                     }`}>
                                         {order.status === 'RECHAZADO' ? 'ANULADA' : order.status}
                                     </span>
                                 </td>
                                 <td className="px-6 py-4 text-right font-bold text-gray-900">${order.total.toFixed(2)}</td>
                                 <td className="px-6 py-4 text-center">
-                                    {order.status === 'PENDIENTE' ? (
-                                        <div className="flex justify-center gap-3">
-                                            <button onClick={() => updateStatus(order.id, 'APROBADO')} className="text-green-600 bg-green-50 hover:bg-green-100 px-3 py-1 rounded border border-green-200 font-bold transition flex items-center gap-1">✔</button>
-                                            <button onClick={() => updateStatus(order.id, 'RECHAZADO')} className="text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1 rounded border border-red-200 font-bold transition flex items-center gap-1">✕</button>
-                                        </div>
-                                    ) : (
-                                        <button 
-                                            onClick={() => setSelectedInvoice(order)}
-                                            className="text-blue-500 font-bold hover:underline text-xs"
-                                        >
-                                            Ver Detalle
-                                        </button>
-                                    )}
+                                    <button 
+                                        onClick={() => setSelectedInvoice(order)}
+                                        className="text-blue-500 font-bold hover:underline text-xs"
+                                    >
+                                        Ver Detalle
+                                    </button>
                                 </td>
                             </tr>
                         ))
@@ -198,51 +183,27 @@ export default function Invoices() {
             </table>
         </div>
 
-        {/* --- NUEVO: CONTROLES DE PAGINACIÓN --- */}
+        {/* CONTROLES DE PAGINACIÓN */}
         {totalPages > 1 && (
           <div className="p-4 bg-gray-50/50 border-t border-gray-100 flex justify-center items-center gap-2">
-            <button 
-              onClick={() => paginate(currentPage - 1)} 
-              disabled={currentPage === 1}
-              className="px-3 py-1 rounded border bg-white text-gray-600 disabled:opacity-50 hover:bg-gray-100 text-sm font-medium transition shadow-sm"
-            >
-              Anterior
-            </button>
-            
+            <button onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} className="px-3 py-1 rounded border bg-white text-gray-600 disabled:opacity-50 hover:bg-gray-100 text-sm transition">Anterior</button>
             <div className="flex gap-1">
               {Array.from({ length: totalPages }, (_, i) => (
-                <button
-                  key={i + 1}
-                  onClick={() => paginate(i + 1)}
-                  className={`w-8 h-8 rounded border text-sm font-bold transition shadow-sm ${
-                    currentPage === i + 1 
-                      ? 'bg-blue-600 text-white border-blue-600' 
-                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  {i + 1}
-                </button>
+                <button key={i + 1} onClick={() => paginate(i + 1)} className={`w-8 h-8 rounded border text-sm font-bold transition ${currentPage === i + 1 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600'}`}>{i + 1}</button>
               ))}
             </div>
-
-            <button 
-              onClick={() => paginate(currentPage + 1)} 
-              disabled={currentPage === totalPages}
-              className="px-3 py-1 rounded border bg-white text-gray-600 disabled:opacity-50 hover:bg-gray-100 text-sm font-medium transition shadow-sm"
-            >
-              Siguiente
-            </button>
+            <button onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages} className="px-3 py-1 rounded border bg-white text-gray-600 disabled:opacity-50 hover:bg-gray-100 text-sm transition">Siguiente</button>
           </div>
         )}
       </div>
 
-      {/* MODAL FACTURA (Sin cambios) */}
+      {/* MODAL FACTURA (COMPROBANTE) */}
       {selectedInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 print:p-0 print:bg-white print:static">
             <div className="bg-white w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden print:shadow-none print:w-full">
                 <div className="bg-blue-600 p-6 flex justify-between items-center text-white print:bg-white print:text-black print:border-b-2 print:border-black">
                     <div>
-                        <h2 className="text-2xl font-bold">FACTURA</h2>
+                        <h2 className="text-2xl font-bold uppercase tracking-tight">Factura de Venta</h2>
                         <p className="opacity-80 text-sm">Comprobante electrónico</p>
                     </div>
                     <div className="text-right">
@@ -256,13 +217,11 @@ export default function Invoices() {
                             <p className="text-xs font-bold text-gray-400 uppercase mb-1">Cliente</p>
                             <p className="font-bold text-gray-800 text-lg">{selectedInvoice.user?.name}</p>
                             <p className="text-gray-500">{selectedInvoice.user?.email}</p>
-                            <p className="text-gray-500 text-sm mt-1">Consumidor Final</p>
                         </div>
                         <div className="text-right">
                             <p className="text-xs font-bold text-gray-400 uppercase mb-1">Emisor</p>
-                            <p className="font-bold text-gray-800">Mi Empresa S.A.</p>
-                            <p className="text-gray-500 text-sm">Av. Tecnológica 123</p>
-                            <p className="text-gray-500 text-sm">CUIT: 30-12345678-9</p>
+                            <p className="font-bold text-gray-800 tracking-tight">TIENDA ONLINE</p>
+                            <p className="text-gray-500 text-sm">Sistema de Facturación</p>
                         </div>
                     </div>
                     <table className="w-full mb-8">
@@ -270,7 +229,7 @@ export default function Invoices() {
                             <tr className="border-b-2 border-gray-100 text-left">
                                 <th className="py-2 text-xs font-bold text-gray-400 uppercase">Descripción</th>
                                 <th className="py-2 text-xs font-bold text-gray-400 uppercase text-center">Cant.</th>
-                                <th className="py-2 text-xs font-bold text-gray-400 uppercase text-right">Precio Unit.</th>
+                                <th className="py-2 text-xs font-bold text-gray-400 uppercase text-right">Precio</th>
                                 <th className="py-2 text-xs font-bold text-gray-400 uppercase text-right">Subtotal</th>
                             </tr>
                         </thead>
@@ -287,15 +246,7 @@ export default function Invoices() {
                     </table>
                     <div className="flex justify-end">
                         <div className="w-64">
-                            <div className="flex justify-between py-2 border-b border-gray-100">
-                                <span className="text-gray-500">Subtotal</span>
-                                <span className="font-medium text-gray-800">${selectedInvoice.total.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between py-2 border-b border-gray-100">
-                                <span className="text-gray-500">IVA (0%)</span>
-                                <span className="font-medium text-gray-800">$0.00</span>
-                            </div>
-                            <div className="flex justify-between py-4">
+                            <div className="flex justify-between py-4 border-t-2 border-gray-100">
                                 <span className="text-xl font-bold text-gray-800">Total</span>
                                 <span className="text-xl font-black text-blue-600">${selectedInvoice.total.toFixed(2)}</span>
                             </div>

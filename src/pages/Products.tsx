@@ -1,37 +1,36 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+// 1. DEFINIMOS LA URL DINÁMICA
+// Se conecta a Render en producción o localhost en desarrollo
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
 interface Product {
   id: number;
   name: string;
   price: number;
-  stock: number; // <--- Nuevo campo
+  stock: number;
 }
 
 export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
-  const [stock, setStock] = useState(''); // <--- Estado para el stock
+  const [stock, setStock] = useState(''); 
   const [editingId, setEditingId] = useState<number | null>(null);
   const navigate = useNavigate();
 
-  // 1. CARGAR PRODUCTOS
+  // 2. CARGAR PRODUCTOS DESDE EL BACKEND
   const fetchProducts = async () => {
     const token = localStorage.getItem('token');
     if (!token) return navigate('/');
 
     try {
-      const response = await fetch('http://localhost:3000/products', {
+      const response = await fetch(`${API_URL}/products`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
-        // Filtramos para ver SOLO MIS productos como Admin
-        // (Aunque el backend devuelve todos, aquí visualmente podemos filtrar o dejar todos)
         const allProducts = await response.json();
-        const myEmail = localStorage.getItem('email');
-        // Un pequeño truco: como el backend trae el usuario creador, podríamos filtrar.
-        // Por ahora mostramos todos los que traiga el backend para simplificar.
         setProducts(allProducts);
       }
     } catch (error) {
@@ -43,14 +42,14 @@ export default function Products() {
     fetchProducts();
   }, [navigate]);
 
-  // 2. GUARDAR (CREAR O EDITAR)
+  // 3. GUARDAR (CREAR O EDITAR)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
     
     const url = editingId 
-      ? `http://localhost:3000/products/${editingId}`
-      : 'http://localhost:3000/products';
+      ? `${API_URL}/products/${editingId}`
+      : `${API_URL}/products`;
       
     const method = editingId ? 'PUT' : 'POST';
 
@@ -61,28 +60,27 @@ export default function Products() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ name, price, stock }) // <--- Enviamos stock
+        body: JSON.stringify({ name, price: parseFloat(price), stock: parseInt(stock) })
       });
 
       if (response.ok) {
         fetchProducts();
         setName('');
         setPrice('');
-        setStock(''); // <--- Limpiamos
+        setStock('');
         setEditingId(null);
       } else {
-        alert('Error al guardar');
+        alert('Error al guardar producto');
       }
     } catch (error) {
-      alert('Error de conexión');
+      alert('Error de conexión con el servidor');
     }
   };
 
-  // 3. EDITAR
   const handleEdit = (product: Product) => {
     setName(product.name);
     setPrice(product.price.toString());
-    setStock(product.stock.toString()); // <--- Cargamos stock
+    setStock(product.stock.toString());
     setEditingId(product.id);
   };
 
@@ -92,7 +90,7 @@ export default function Products() {
     const token = localStorage.getItem('token');
     
     try {
-      await fetch(`http://localhost:3000/products/${id}`, {
+      await fetch(`${API_URL}/products/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -107,115 +105,119 @@ export default function Products() {
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800">📦 Gestión de Productos</h1>
-          <button onClick={() => navigate('/dashboard')} className="text-blue-600 hover:underline">
+          <button 
+            onClick={() => navigate('/dashboard')} 
+            className="text-blue-600 font-bold hover:underline flex items-center gap-1"
+          >
             ← Volver al Panel
           </button>
         </div>
 
-        {/* FORMULARIO */}
-        <div className="bg-white p-6 rounded-lg shadow mb-8">
+        {/* --- FORMULARIO DE PRODUCTOS --- */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
           <h2 className="text-xl font-bold mb-4 text-gray-700">
             {editingId ? '✏️ Editar Producto' : '➕ Nuevo Producto'}
           </h2>
-          <form onSubmit={handleSubmit} className="flex gap-4 items-end">
-            <div className="flex-grow">
-              <label className="block text-sm font-medium text-gray-700">Nombre</label>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div className="md:col-span-2">
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre</label>
               <input 
                 type="text" 
                 value={name}
                 onChange={e => setName(e.target.value)}
-                className="w-full border p-2 rounded mt-1"
+                className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 placeholder="Ej: Mantenimiento Web"
                 required
               />
             </div>
-            <div className="w-32">
-              <label className="block text-sm font-medium text-gray-700">Precio ($)</label>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Precio ($)</label>
               <input 
                 type="number" 
                 value={price}
                 onChange={e => setPrice(e.target.value)}
-                className="w-full border p-2 rounded mt-1"
+                className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                 placeholder="0.00"
                 step="0.01"
                 required
               />
             </div>
-            <div className="w-24">
-              <label className="block text-sm font-medium text-gray-700">Stock</label>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Stock</label>
               <input 
                 type="number" 
                 value={stock}
                 onChange={e => setStock(e.target.value)}
-                className="w-full border p-2 rounded mt-1 bg-yellow-50 font-bold"
+                className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-yellow-50 font-bold"
                 placeholder="0"
                 required
               />
             </div>
-            <button 
-              type="submit" 
-              className={`px-6 py-2 rounded font-bold text-white transition ${
-                editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-600 hover:bg-green-700'
-              }`}
-            >
-              {editingId ? 'Actualizar' : 'Guardar'}
-            </button>
-            {editingId && (
+            <div className="md:col-span-4 flex justify-end gap-2">
+              {editingId && (
+                <button 
+                  type="button" 
+                  onClick={() => { setEditingId(null); setName(''); setPrice(''); setStock(''); }}
+                  className="bg-gray-200 text-gray-600 px-6 py-2 rounded-lg font-bold hover:bg-gray-300 transition"
+                >
+                  Cancelar
+                </button>
+              )}
               <button 
-                type="button"
-                onClick={() => {
-                  setEditingId(null);
-                  setName('');
-                  setPrice('');
-                  setStock('');
-                }}
-                className="bg-gray-400 text-white px-4 py-2 rounded font-bold hover:bg-gray-500"
+                type="submit" 
+                className={`px-8 py-2 rounded-lg font-bold text-white transition shadow-md ${
+                  editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-600 hover:bg-green-700'
+                }`}
               >
-                Cancelar
+                {editingId ? 'Actualizar' : 'Guardar'}
               </button>
-            )}
+            </div>
           </form>
         </div>
 
-        {/* LISTA DE PRODUCTOS */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        {/* --- TABLA DE PRODUCTOS --- */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-gray-800 text-white">
               <tr>
-                <th className="p-4">Producto</th>
-                <th className="p-4">Precio</th>
-                <th className="p-4">Stock</th>
-                <th className="p-4 text-center">Acciones</th>
+                <th className="p-4 text-xs font-black uppercase tracking-wider">Producto</th>
+                <th className="p-4 text-xs font-black uppercase tracking-wider">Precio</th>
+                <th className="p-4 text-xs font-black uppercase tracking-wider">Stock</th>
+                <th className="p-4 text-xs font-black uppercase tracking-wider text-center">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {products.map(product => (
-                <tr key={product.id} className="hover:bg-gray-50">
-                  <td className="p-4 font-medium text-gray-800">{product.name}</td>
-                  <td className="p-4 text-green-600 font-bold">${product.price.toFixed(2)}</td>
-                  <td className="p-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      product.stock > 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {product.stock} un.
-                    </span>
-                  </td>
-                  <td className="p-4 text-center space-x-2">
-                    <button 
-                      onClick={() => handleEdit(product)}
-                      className="text-blue-600 hover:text-blue-800 font-bold text-sm"
-                    >
-                      Editar
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(product.id)}
-                      className="text-red-500 hover:text-red-700 font-bold text-sm"
-                    >
-                      Borrar
-                    </button>
-                  </td>
-                </tr>
-              ))}
+            <tbody className="divide-y divide-gray-100">
+              {products.length === 0 ? (
+                <tr><td colSpan={4} className="p-10 text-center text-gray-400">No hay productos registrados.</td></tr>
+              ) : (
+                products.map(product => (
+                  <tr key={product.id} className="hover:bg-gray-50 transition">
+                    <td className="p-4 font-medium text-gray-800">{product.name}</td>
+                    <td className="p-4 text-green-600 font-black">${product.price.toFixed(2)}</td>
+                    <td className="p-4">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
+                        product.stock > 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {product.stock} unidades
+                      </span>
+                    </td>
+                    <td className="p-4 text-center flex justify-center gap-4">
+                      <button 
+                        onClick={() => handleEdit(product)}
+                        className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition font-bold text-sm"
+                      >
+                        ✏️ Editar
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(product.id)}
+                        className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition font-bold text-sm"
+                      >
+                        🗑️ Borrar
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
