@@ -15,7 +15,7 @@ import io from 'socket.io-client';
 
 // 1. DEFINIMOS LA URL DINÁMICA
 // Se conecta a Render en producción o localhost en desarrollo
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000';
 
 // 2. CONEXIÓN AL SOCKET USANDO LA URL DINÁMICA
 const socket = io(API_URL);

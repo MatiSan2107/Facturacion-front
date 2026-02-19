@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 
 // 1. DEFINIMOS LA URL DINÁMICA
 // Conecta a Render en producción o localhost en desarrollo
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000';
 
 interface InvoiceItem {
   id: number;

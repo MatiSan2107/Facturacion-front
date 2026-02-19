@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 // 1. DEFINIMOS LA URL DINÁMICA
 // Usará la variable de Vercel en producción o localhost en tu PC
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000';
 
 interface Client {
   id: number;
@@ -121,65 +121,6 @@ export default function Clients() {
           </button>
         </div>
 
-        {/* FORMULARIO DE REGISTRO/EDICIÓN */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
-          <h2 className="text-xl font-bold mb-4 text-gray-700">
-            {editingId ? '✏️ Editar Cliente' : '➕ Nuevo Cliente'}
-          </h2>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre</label>
-              <input 
-                type="text" 
-                value={name}
-                onChange={e => setName(e.target.value)}
-                className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="Nombre del cliente"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
-              <input 
-                type="email" 
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="correo@ejemplo.com"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID Fiscal (Opcional)</label>
-              <input 
-                type="text" 
-                value={taxId}
-                onChange={e => setTaxId(e.target.value)}
-                className="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="CUIT/RUT/DNI"
-              />
-            </div>
-            <div className="md:col-span-3 flex justify-end gap-2 mt-2">
-              {editingId && (
-                <button 
-                  type="button" 
-                  onClick={resetForm}
-                  className="px-6 py-2 rounded-lg font-bold bg-gray-200 text-gray-600 hover:bg-gray-300 transition"
-                >
-                  Cancelar
-                </button>
-              )}
-              <button 
-                type="submit" 
-                className={`px-8 py-2 rounded-lg font-bold text-white transition shadow-md ${
-                  editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-              >
-                {editingId ? 'Actualizar Cliente' : 'Guardar Cliente'}
-              </button>
-            </div>
-          </form>
-        </div>
 
         {/* TABLA DE CLIENTES */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -188,7 +129,6 @@ export default function Clients() {
               <tr>
                 <th className="p-4 text-xs font-black text-gray-400 uppercase">Nombre</th>
                 <th className="p-4 text-xs font-black text-gray-400 uppercase">Email</th>
-                <th className="p-4 text-xs font-black text-gray-400 uppercase">ID Fiscal</th>
                 <th className="p-4 text-xs font-black text-gray-400 uppercase text-right">Acciones</th>
               </tr>
             </thead>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { API_URL } from '../api';
 
 interface Order {
   id: number;
@@ -42,12 +43,12 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
     if (!token) return;
 
     try {
-      const resClients = await fetch('http://localhost:3000/clients', {
+      const resClients = await fetch('http://localhost:10000/clients', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const clients = await resClients.json();
 
-      const resOrders = await fetch('http://localhost:3000/orders', {
+      const resOrders = await fetch('http://localhost:10000/orders', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -81,7 +82,7 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
 
     const token = localStorage.getItem('token');
     try {
-      await fetch(`http://localhost:3000/orders/${id}/status`, {
+      await fetch(`${API_URL}/orders/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ status })

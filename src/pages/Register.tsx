@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 
 // 1. Definimos la URL de la API dinámicamente.
 // VITE_API_URL es la que configuraste en el panel de Vercel.
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000';
 
 export default function Register() {
   const [name, setName] = useState('');
