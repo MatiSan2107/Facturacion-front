@@ -2,11 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 
-// 1. DEFINIMOS LA URL DINÁMICA
-// Conecta a Render en producción o localhost en desarrollo
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000';
-
-// 2. CONEXIÓN AL SERVIDOR DE SOCKETS USANDO LA URL DINÁMICA
 const socket = io(API_URL);
 
 interface Message {
@@ -14,74 +10,54 @@ interface Message {
   text: string;
   time: string;
   isMe: boolean;
+  fileUrl?: string; // Para archivos PDF
+  fileName?: string;
 }
 
-interface ChatProps {
-  onOpen: () => void;
-}
-
-export default function Chat({ onOpen }: ChatProps) {
+export default function Chat({ onOpen }: { onOpen: () => void }) {
   const navigate = useNavigate();
   const [message, setMessage] = useState("");
   const [list, setList] = useState<Message[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Datos del usuario actual
   const userEmail = localStorage.getItem('email') || "Anónimo";
+  const userRole = localStorage.getItem('role') || "USER";
+
+  // Determinamos a qué sala unirse
+  // Si soy Admin, debo elegir con quién hablar (por ahora usamos una sala fija o dinámica)
+  const room = userRole === 'ADMIN' ? "admin_room" : `room_${userEmail}`;
 
   useEffect(() => {
-    // Notificar al sistema que el chat se abrió para limpiar notificaciones
     onOpen();
-    fetchHistory();
+    
+    // Unirse a la sala privada al conectar
+    socket.emit("join_room", room);
 
-    // Escuchar mensajes nuevos en tiempo real
     const handleReceiveMessage = (data: any) => {
       setList((prev) => [...prev, {
         author: data.author,
         text: data.message,
         time: data.time,
-        isMe: data.author === userEmail
+        isMe: data.author === userEmail,
+        fileUrl: data.fileUrl,
+        fileName: data.fileName
       }]);
     };
 
     socket.on("receive_message", handleReceiveMessage);
     return () => { socket.off("receive_message", handleReceiveMessage); };
-  }, [userEmail, onOpen]);
+  }, [userEmail, room]);
 
-  // Scroll automático al final
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [list]);
-
-  // 3. CARGAR HISTORIAL DESDE LA NUBE
-  const fetchHistory = async () => {
-    const token = localStorage.getItem('token');
-    try {
-      const response = await fetch(`${API_URL}/chat/history`, { // <-- CAMBIADO
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await response.json();
-      
-      const history = data.map((msg: any) => ({
-        author: msg.author,
-        text: msg.text,
-        time: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isMe: msg.author === userEmail
-      }));
-      
-      setList(history);
-    } catch (error) {
-      console.error("Error cargando historial del chat");
-    }
-  };
-
-  // 4. ENVIAR MENSAJE VÍA SOCKET
-  const sendMessage = async () => {
-    if (message.trim() === "") return;
+  const sendMessage = async (fileData?: { url: string, name: string }) => {
+    if (message.trim() === "" && !fileData) return;
 
     const msgData = {
+      room: room, // Enviamos el mensaje solo a esta sala
       author: userEmail,
       message: message,
+      fileUrl: fileData?.url,
+      fileName: fileData?.name,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -89,104 +65,78 @@ export default function Chat({ onOpen }: ChatProps) {
     setMessage("");
   };
 
-  // 5. BORRAR HISTORIAL INDIVIDUAL
-  const clearChat = async () => {
-    if (!confirm("¿Deseas limpiar tu historial de chat? La otra persona conservará los mensajes.")) return;
+  // Función para subir y enviar PDF
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || file.type !== 'application/pdf') {
+      alert("Solo se permiten archivos PDF");
+      return;
+    }
 
-    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('file', file);
+
     try {
-      const res = await fetch(`${API_URL}/chat/history`, { // <-- CAMBIADO
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await fetch(`${API_URL}/chat/upload`, {
+        method: 'POST',
+        body: formData,
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-      if (res.ok) {
-        setList([]); 
+      const data = await res.json();
+      if (data.url) {
+        sendMessage({ url: data.url, name: file.name });
       }
     } catch (error) {
-      alert("Error al intentar ocultar el historial");
+      alert("Error al subir el archivo");
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-0 sm:p-4 font-sans">
-      <div className="bg-white w-full max-w-2xl h-screen sm:h-[700px] shadow-2xl sm:rounded-3xl overflow-hidden flex flex-col border border-slate-200">
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+      <div className="bg-white w-full max-w-2xl h-[700px] shadow-2xl rounded-3xl overflow-hidden flex flex-col border border-slate-200">
         
-        {/* Cabecera */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-5 flex justify-between items-center text-white shadow-lg shrink-0">
-          <div className="flex items-center gap-4">
-            <button onClick={() => navigate(-1)} className="hover:bg-white/20 p-2 rounded-full transition-all active:scale-90">
-              <span className="text-xl">←</span>
-            </button>
-            <div className="flex flex-col">
-              <h2 className="font-extrabold text-lg tracking-tight">Centro de Soporte</h2>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                <span className="text-[11px] font-medium text-blue-100 uppercase tracking-widest">En Línea</span>
-              </div>
-            </div>
-          </div>
-
-          <button 
-            onClick={clearChat} 
-            className="bg-red-500/20 hover:bg-red-600 p-2.5 rounded-xl transition-all group flex items-center gap-2 border border-red-400/30" 
-            title="Limpiar mi chat"
-          >
-            <span className="text-[10px] font-bold hidden sm:inline uppercase">Limpiar mi vista</span>
-            <span className="group-hover:scale-110 block">🗑️</span>
-          </button>
+        {/* Cabecera idéntica a la anterior */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-5 flex justify-between items-center text-white">
+          <h2 className="font-extrabold text-lg">Soporte Privado: {userEmail.split('@')[0]}</h2>
         </div>
 
-        {/* Mensajes */}
+        {/* Lista de Mensajes */}
         <div className="flex-1 p-6 overflow-y-auto bg-[#f0f2f5] flex flex-col gap-4">
-          {list.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full opacity-40">
-              <span className="text-5xl mb-4">💬</span>
-              <p className="text-sm font-semibold text-slate-600 italic uppercase">Tu historial está vacío</p>
-            </div>
-          )}
-
           {list.map((msg, index) => (
             <div key={index} className={`flex flex-col ${msg.isMe ? "items-end" : "items-start"}`}>
-              {!msg.isMe && (
-                <span className="text-[10px] font-bold text-slate-500 ml-2 mb-1 uppercase tracking-tighter">
-                  {msg.author.split('@')[0]}
-                </span>
-              )}
-              
-              <div className={`relative px-4 py-2.5 shadow-sm max-w-[85%] ${
-                msg.isMe 
-                  ? "bg-blue-600 text-white rounded-2xl rounded-tr-none" 
-                  : "bg-white text-slate-800 rounded-2xl rounded-tl-none border border-slate-200"
-              }`}>
-                <p className="text-[14.5px] leading-relaxed break-words">{msg.text}</p>
-                <p className={`text-[9px] mt-1 text-right font-medium ${msg.isMe ? "text-blue-100" : "text-slate-400"}`}>
-                  {msg.time}
-                </p>
+              <div className={`px-4 py-2.5 shadow-sm max-w-[85%] ${msg.isMe ? "bg-blue-600 text-white rounded-2xl rounded-tr-none" : "bg-white text-slate-800 rounded-2xl rounded-tl-none border border-slate-200"}`}>
+                {msg.text && <p className="text-[14.5px] leading-relaxed">{msg.text}</p>}
+                
+                {/* Renderizado de PDF */}
+                {msg.fileUrl && (
+                  <a href={msg.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 mt-2 p-2 bg-black/10 rounded-lg hover:bg-black/20 transition">
+                    <span className="text-xl">📄</span>
+                    <span className="text-xs font-bold underline truncate max-w-[150px]">{msg.fileName}</span>
+                  </a>
+                )}
+                
+                <p className="text-[9px] mt-1 text-right opacity-60">{msg.time}</p>
               </div>
             </div>
           ))}
           <div ref={bottomRef} />
         </div>
 
-        {/* Entrada de texto */}
-        <div className="p-4 bg-white border-t border-slate-100 flex items-center gap-3 shrink-0">
+        {/* Input con Botón de Archivo */}
+        <div className="p-4 bg-white border-t flex items-center gap-3">
+          <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf" />
+          <button onClick={() => fileInputRef.current?.click()} className="text-2xl hover:bg-slate-100 p-2 rounded-xl transition">📎</button>
+          
           <input
             type="text"
-            className="flex-1 bg-slate-100 border-none rounded-2xl px-5 py-3.5 text-sm focus:ring-2 focus:ring-blue-500 transition-all outline-none"
-            placeholder="Escribe un mensaje aquí..."
+            className="flex-1 bg-slate-100 rounded-2xl px-5 py-3 text-sm outline-none"
+            placeholder="Escribe un mensaje..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyPress={(e) => e.key === "Enter" && sendMessage()}
           />
-          <button 
-            onClick={sendMessage}
-            disabled={!message.trim()}
-            className="bg-blue-600 disabled:bg-slate-300 text-white w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-95"
-          >
-            <span className="text-xl">➤</span>
-          </button>
+          <button onClick={() => sendMessage()} className="bg-blue-600 text-white w-12 h-12 rounded-2xl shadow-md">➤</button>
         </div>
-
       </div>
     </div>
   );
