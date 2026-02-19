@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { API_URL } from '../api';
+import { API_URL } from '../api'; // Importamos la URL configurada para Render
 
 interface Order {
   id: number;
@@ -17,8 +17,6 @@ interface DashboardProps {
 export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
   const navigate = useNavigate();
   const [userEmail, setUserEmail] = useState('');
-  
-  // Guardamos TODOS los pedidos aquí
   const [recentOrders, setRecentOrders] = useState<Order[]>([]); 
   
   const [stats, setStats] = useState({
@@ -28,9 +26,8 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
     pendingOrders: 0
   });
 
-  // --- NUEVO: ESTADOS DE PAGINACIÓN ---
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5; // Cantidad de filas por página
+  const itemsPerPage = 5;
 
   useEffect(() => {
     const email = localStorage.getItem('email');
@@ -43,18 +40,20 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
     if (!token) return;
 
     try {
-      const resClients = await fetch('http://localhost:10000/clients', {
+      // CORRECCIÓN: Usamos API_URL en lugar de localhost fijo
+      const resClients = await fetch(`${API_URL}/clients`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const clients = await resClients.json();
 
-      const resOrders = await fetch('http://localhost:10000/orders', {
+      const resOrders = await fetch(`${API_URL}/orders`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
       if (resOrders.ok) {
         const ordersData: Order[] = await resOrders.json();
 
+        // Lógica de cálculo de estadísticas
         const pendingCount = ordersData.filter(o => o.status === 'PENDIENTE').length;
         const totalMoney = ordersData
             .filter(o => o.status === 'APROBADO') 
@@ -68,7 +67,6 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
           pendingOrders: pendingCount
         });
 
-        // --- CAMBIO: GUARDAMOS TODOS LOS DATOS (Sin el slice de 10) ---
         setRecentOrders(ordersData);
       }
 
@@ -98,7 +96,6 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
     navigate('/');
   };
 
-  // --- LÓGICA DE PAGINACIÓN ---
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = recentOrders.slice(indexOfFirstItem, indexOfLastItem);
@@ -109,7 +106,6 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
   return (
     <div className="min-h-screen bg-gray-100 font-sans">
       
-      {/* BARRA DE NAVEGACIÓN */}
       <nav className="bg-white shadow p-4 flex justify-between items-center sticky top-0 z-10">
         <h1 className="text-xl font-bold text-blue-600">Sistema Facturación</h1>
         
@@ -140,8 +136,7 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
       <main className="p-4 md:p-8 max-w-[1600px] mx-auto">
         <h2 className="text-2xl font-bold mb-6 text-gray-800">Panel de Control</h2>
         
-        {/* TARJETAS */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           
           <Link to="/clients" className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition border-l-4 border-blue-500 block group">
             <div className="flex justify-between items-center">
@@ -169,7 +164,7 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
               <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-gray-500 text-xs font-bold uppercase tracking-wide">Facturado</h3>
-                <p className="text-xl font-bold text-green-600 mt-1 truncate max-w-[100px]">${stats.invoiceTotal.toFixed(2)}</p>
+                <p className="text-xl font-bold text-green-600 mt-1 truncate max-w-[150px]">${stats.invoiceTotal.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</p>
                 <p className="text-xs text-gray-400 mt-1">{stats.invoiceCount} ventas</p>
               </div>
               <div className="bg-green-100 p-3 rounded-full text-green-600 text-2xl">💵</div>
@@ -194,34 +189,32 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
 
         </div>
 
-        {/* TABLA DE ÚLTIMOS MOVIMIENTOS PAGINADA */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="p-4 border-b flex justify-between items-center bg-gray-50">
             <h3 className="font-bold text-gray-700">Últimos Movimientos</h3>
             <div className="flex gap-4 items-center">
                <span className="text-xs text-gray-400">Total: {recentOrders.length} registros</span>
-               <button onClick={fetchData} className="text-sm text-blue-600 hover:underline cursor-pointer">🔄 Actualizar</button>
+               <button onClick={fetchData} className="text-sm text-blue-600 hover:underline cursor-pointer font-bold">🔄 Actualizar</button>
             </div>
           </div>
           
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-bold border-b">
                 <tr>
                   <th className="p-4">Fecha</th>
                   <th className="p-4">Cliente</th>
                   <th className="p-4 text-center">Estado</th>
                   <th className="p-4 text-right">Monto</th>
-                
+                  <th className="p-4 text-center">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {currentItems.length === 0 ? (
                   <tr><td colSpan={5} className="p-8 text-center text-gray-400 italic">No hay pedidos recientes.</td></tr>
                 ) : (
-                  // USAMOS currentItems PARA MOSTRAR SOLO 5 POR PÁGINA
                   currentItems.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50 transition">
+                    <tr key={order.id} className="hover:bg-blue-50/20 transition">
                       <td className="p-4 text-sm text-gray-600">
                         <div className="font-medium">{new Date(order.createdAt).toLocaleDateString()}</div>
                         <div className="text-xs text-gray-400 mt-0.5">{new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} hs</div>
@@ -231,22 +224,22 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
                         <p className="text-xs text-gray-400">{order.user?.email}</p>
                       </td>
                       <td className="p-4 text-center">
-                        <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-wide ${
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wide ${
                           order.status === 'APROBADO' ? 'bg-green-100 text-green-700' : 
                           order.status === 'RECHAZADO' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-700'
                         }`}>
                           {order.status === 'RECHAZADO' ? 'ANULADA' : order.status}
                         </span>
                       </td>
-                      <td className="p-4 text-right font-bold text-gray-700">${order.total}</td>
+                      <td className="p-4 text-right font-bold text-gray-700">${order.total.toFixed(2)}</td>
                       <td className="p-4 text-center">
                         {order.status === 'PENDIENTE' ? (
                           <div className="flex gap-2 justify-center">
-                            <button onClick={() => updateStatus(order.id, 'APROBADO')} className="bg-green-100 text-green-600 w-8 h-8 rounded flex items-center justify-center hover:bg-green-500 hover:text-white transition shadow-sm" title="Aprobar">✔</button>
-                            <button onClick={() => updateStatus(order.id, 'RECHAZADO')} className="bg-red-100 text-red-600 w-8 h-8 rounded flex items-center justify-center hover:bg-red-500 hover:text-white transition shadow-sm" title="Rechazar">✕</button>
+                            <button onClick={() => updateStatus(order.id, 'APROBADO')} className="bg-green-100 text-green-600 w-8 h-8 rounded-full flex items-center justify-center hover:bg-green-500 hover:text-white transition shadow-sm" title="Aprobar">✔</button>
+                            <button onClick={() => updateStatus(order.id, 'RECHAZADO')} className="bg-red-100 text-red-600 w-8 h-8 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white transition shadow-sm" title="Rechazar">✕</button>
                           </div>
                         ) : (
-                          <span className="text-gray-300 text-xl">•</span>
+                          <span className="text-gray-300">•</span>
                         )}
                       </td>
                     </tr>
@@ -256,31 +249,29 @@ export default function Dashboard({ unreadMessages = 0 }: DashboardProps) {
             </table>
           </div>
 
-          {/* --- CONTROLES DE PAGINACIÓN --- */}
           {totalPages > 1 && (
-            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-center items-center gap-2">
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-center items-center gap-4">
               <button 
                 onClick={() => paginate(currentPage - 1)} 
                 disabled={currentPage === 1}
-                className="px-3 py-1 rounded border bg-white disabled:opacity-50 hover:bg-gray-100 text-sm"
+                className="px-4 py-2 rounded-lg border bg-white disabled:opacity-50 hover:bg-gray-100 text-sm font-bold text-gray-600 transition shadow-sm"
               >
-                Anterior
+                ← Anterior
               </button>
               
-              <span className="text-sm text-gray-600 font-medium">
+              <span className="text-sm text-gray-600 font-bold bg-white px-4 py-2 rounded-lg border shadow-sm">
                 Página {currentPage} de {totalPages}
               </span>
 
               <button 
                 onClick={() => paginate(currentPage + 1)} 
                 disabled={currentPage === totalPages}
-                className="px-3 py-1 rounded border bg-white disabled:opacity-50 hover:bg-gray-100 text-sm"
+                className="px-4 py-2 rounded-lg border bg-white disabled:opacity-50 hover:bg-gray-100 text-sm font-bold text-gray-600 transition shadow-sm"
               >
-                Siguiente
+                Siguiente →
               </button>
             </div>
           )}
-
         </div>
       </main>
     </div>
